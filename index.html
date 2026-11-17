@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro de Estudo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: vídeo à esquerda, relógio à direita; empilha no celular */
+  :root {
+    --bg: #0f1614;
+    --panel: #17211e;
+    --line: #2a3833;
+    --fg: #e8efe9;
+    --muted: #8fa39a;
+    --focus: #e2694a;   /* foco */
+    --rest: #6fc3a0;    /* pausa */
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 var(--body);
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap {
+    max-width: 1200px; margin: 0 auto;
+    display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+
+  .video { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .video .frame { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #000; }
+  .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .video .cap { padding: 10px 14px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .video .cap a { color: var(--muted); }
+
+  .timer {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 20px;
+    --mode: var(--focus);
+  }
+  .timer.rest { --mode: var(--rest); }
+
+  .phase {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600;
+    color: var(--mode); display: flex; align-items: center; gap: 8px;
+  }
+  .phase::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mode); }
+  .timer.paused .phase::before { animation: blink 1.2s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .ring { position: relative; width: min(280px, 100%); aspect-ratio: 1; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 7; }
+  .ring .track { stroke: var(--line); }
+  .ring .bar { stroke: var(--mode); stroke-linecap: round; transition: stroke-dashoffset .4s linear, stroke .3s; }
+  .ring .time {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--display); font-weight: 700; font-size: clamp(56px, 14vw, 76px);
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+  }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font: 600 15px var(--body); color: var(--fg); background: transparent;
+    border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible { outline: 2px solid var(--mode); outline-offset: 2px; }
+  button.primary { background: var(--mode); border-color: var(--mode); color: #10140f; min-width: 130px; }
+
+  .breaks { width: 100%; border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .breaks .label { color: var(--muted); font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; padding: 7px 18px; }
+  .seg button[aria-pressed="true"] { background: var(--rest); color: #10140f; }
+
+  .count { color: var(--muted); font-size: 13px; }
+  .count b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+  .banner {
+    width: 100%; text-align: center; padding: 12px; border-radius: 10px;
+    background: color-mix(in srgb, var(--mode) 16%, transparent); color: var(--fg); font-weight: 500;
+  }
+  @media (prefers-reduced-motion: reduce) { .ring .bar { transition: none; } .timer.paused .phase::before { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="video">
+    <div class="frame">
+      <iframe id="yt"
+        src="https://www.youtube.com/embed/rFZHOHl-L8A?rel=0&modestbranding=1&enablejsapi=1"
+        title="Live para concentração"
+        allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    </div>
+    <div class="cap">
+      <span>A live lofi começa junto quando você clica em Começar</span>
+      <a href="https://www.youtube.com/watch?v=rFZHOHl-L8A" target="_blank" rel="noopener">Abrir no YouTube</a>
+    </div>
+  </section>
+
+  <section class="timer" id="timer">
+    <div class="phase" id="phase">Foco · 25 min</div>
+    <div class="ring">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="track" cx="50" cy="50" r="45"></circle>
+        <circle class="bar" id="bar" cx="50" cy="50" r="45"></circle>
+      </svg>
+      <div class="time" id="time" role="timer" aria-live="off">25:00</div>
+    </div>
+
+    <div class="banner" id="banner" hidden></div>
+
+    <div class="controls">
+      <button class="primary" id="startBtn">Começar</button>
+      <button id="resetBtn">Reiniciar</button>
+      <button id="skipBtn">Pular</button>
+    </div>
+
+    <div class="breaks">
+      <span class="label">Duração da pausa</span>
+      <div class="seg" role="group" aria-label="Duração da pausa">
+        <button id="b5" aria-pressed="true" data-min="5">5 min</button>
+        <button id="b10" aria-pressed="false" data-min="10">10 min</button>
+      </div>
+      <span class="count">Pomodoros concluídos hoje: <b id="done">0</b></span>
+    </div>
+  </section>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+  // Controle da live pelo YouTube IFrame API
+  let ytPlayer = null;
+  function onYouTubeIframeAPIReady() {
+    ytPlayer = new YT.Player("yt");
+  }
+  function playLive() {
+    try { if (ytPlayer && ytPlayer.playVideo) { ytPlayer.unMute(); ytPlayer.playVideo(); } } catch {}
+  }
+
+  const FOCUS_MIN = 25;
+  const $ = (id) => document.getElementById(id);
+  const timerEl = $("timer"), timeEl = $("time"), phaseEl = $("phase"), bar = $("bar");
+  const startBtn = $("startBtn"), banner = $("banner");
+  const CIRC = 2 * Math.PI * 45;
+  bar.style.strokeDasharray = CIRC;
+
+  let breakMin = 5;
+  let mode = "focus";          // "focus" | "rest"
+  let total = FOCUS_MIN * 60;  // segundos da fase atual
+  let remaining = total;
+  let endAt = null;            // timestamp de término quando rodando
+  let tick = null;
+  let done = 0;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem("pomo") || "{}");
+    if (saved.breakMin === 10) breakMin = 10;
+    if (saved.day === new Date().toDateString()) done = saved.done || 0;
+  } catch {}
+  const save = () => { try { localStorage.setItem("pomo", JSON.stringify({ breakMin, done, day: new Date().toDateString() })); } catch {} };
+
+  // Bipe com Web Audio (sem arquivo de som)
+  let ctx;
+  function beep(times = 3) {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    for (let i = 0; i < times; i++) {
+      const t = now + i * 0.45;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = mode === "focus" ? 880 : 660;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.6, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.4);
+    }
+  }
+
+  function notify(text) {
+    if ("Notification" in window && Notification.permission === "granted") {
+      try { new Notification("Pomodoro", { body: text }); } catch {}
+    }
+  }
+
+  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  function render() {
+    timeEl.textContent = fmt(remaining);
+    bar.style.strokeDashoffset = CIRC * (1 - remaining / total);
+    const label = mode === "focus" ? `Foco · ${FOCUS_MIN} min` : `Pausa · ${breakMin} min`;
+    phaseEl.textContent = endAt || remaining === total ? label : `${label} · pausado`;
+    timerEl.classList.toggle("rest", mode === "rest");
+    timerEl.classList.toggle("paused", !endAt && remaining !== total);
+    document.title = `${fmt(remaining)} · ${mode === "focus" ? "Foco" : "Pausa"}`;
+    startBtn.textContent = endAt ? "Pausar" : (remaining === total ? "Começar" : "Continuar");
+  }
+
+  function setPhase(m) {
+    mode = m;
+    total = (m === "focus" ? FOCUS_MIN : breakMin) * 60;
+    remaining = total;
+    endAt = null;
+    clearInterval(tick);
+    render();
+  }
+
+  function start() {
+    if (endAt) return;
+    endAt = Date.now() + remaining * 1000;
+    banner.hidden = true;
+    clearInterval(tick);
+    tick = setInterval(update, 250);
+    render();
+  }
+
+  function pause() {
+    if (!endAt) return;
+    remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    endAt = null;
+    clearInterval(tick);
+    render();
+  }
+
+  function update() {
+    remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    if (remaining === 0) return finish();
+    render();
+  }
+
+  function finish() {
+    beep(mode === "focus" ? 4 : 3);
+    if (mode === "focus") {
+      done++; save();
+      $("done").textContent = done;
+      notify(`Pomodoro concluído! Hora da pausa de ${breakMin} minutos.`);
+      setPhase("rest");
+      banner.textContent = `Pomodoro concluído! Pausa de ${breakMin} min começou.`;
+      banner.hidden = false;
+      start();
+    } else {
+      notify("Pausa encerrada. Bora voltar a estudar!");
+      setPhase("focus");
+      banner.textContent = "Pausa encerrada. Clique em Começar quando estiver pronto.";
+      banner.hidden = false;
+    }
+  }
+
+  startBtn.addEventListener("click", () => {
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    if (!endAt) playLive();
+    endAt ? pause() : start();
+  });
+  $("resetBtn").addEventListener("click", () => { banner.hidden = true; setPhase(mode); });
+  $("skipBtn").addEventListener("click", () => { banner.hidden = true; setPhase(mode === "focus" ? "rest" : "focus"); });
+
+  for (const b of [$("b5"), $("b10")]) {
+    b.addEventListener("click", () => {
+      breakMin = Number(b.dataset.min); save();
+      $("b5").setAttribute("aria-pressed", breakMin === 5);
+      $("b10").setAttribute("aria-pressed", breakMin === 10);
+      // se estiver numa pausa ainda não iniciada, aplica na hora
+      if (mode === "rest" && !endAt && remaining === total) setPhase("rest");
+      else if (mode === "rest" && endAt) {
+        const elapsed = total - Math.ceil((endAt - Date.now()) / 1000);
+        total = breakMin * 60;
+        remaining = Math.max(1, total - elapsed);
+        endAt = Date.now() + remaining * 1000;
+        render();
+      } else render();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && e.target.tagName !== "BUTTON") { e.preventDefault(); startBtn.click(); }
+  });
+
+  $("b5").setAttribute("aria-pressed", breakMin === 5);
+  $("b10").setAttribute("aria-pressed", breakMin === 10);
+  $("done").textContent = done;
+  render();
+</script>
+</body>
+</html>
